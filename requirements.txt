@@ -4,5 +4,5 @@ keras
 numpy
 imutils
 scikit-learn
-skimage
+scikit-image
 matplotlib
