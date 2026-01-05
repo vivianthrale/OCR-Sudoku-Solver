@@ -6,21 +6,19 @@ from werkzeug.utils import secure_filename
 import tempfile
 
 # Import sudoku solving functions
-from utils.sudoku_solver import solve_sudoku
-from utils.sudoku_board_detector import get_sudoku_board_contour, extract_sudoku_board
-from utils.process_sudoku_board import get_individual_cells, ocr_digits
-from utils.display import display_sudoku_board, display_solved_sudoku
-from tensorflow import keras
+from utils.image_processor import locate_puzzle, extract_digit
+from utils.sudoku import Sudoku
+from keras.preprocessing.image import img_to_array
+from keras.models import load_model
 
 app = Flask(__name__)
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
 
 # Load the digit classifier model
 MODEL_PATH = 'trained_model/digit_classifier.h5'
-model = keras.models.load_model(MODEL_PATH)
+model = load_model(MODEL_PATH)
 
-HTML_TEMPLATE = '''
-<!DOCTYPE html>
+HTML_TEMPLATE = '''<!DOCTYPE html>
 <html>
 <head>
     <title>OCR Sudoku Solver</title>
@@ -110,8 +108,7 @@ HTML_TEMPLATE = '''
         {% endif %}
     </div>
 </body>
-</html>
-'''
+</html>'''
 
 @app.route('/')
 def index():
@@ -141,29 +138,48 @@ def solve():
             
             # Process the sudoku image
             # 1. Detect and extract sudoku board
-            contour = get_sudoku_board_contour(image)
-            if contour is None:
-                return render_template_string(HTML_TEMPLATE, error='Could not detect Sudoku board in image')
+            puzzleImage, warped = locate_puzzle(image, debug=False)
             
-            board_image = extract_sudoku_board(image, contour)
+            # 2. Initialize 9x9 board
+            board = np.zeros((9, 9), dtype='int')
             
-            # 2. Get individual cells
-            cells = get_individual_cells(board_image)
+            # 3. Extract digits from each cell
+            stepX = warped.shape[1] // 9
+            stepY = warped.shape[0] // 9
             
-            # 3. OCR the digits
-            board = ocr_digits(cells, model)
+            for y in range(9):
+                for x in range(9):
+                    startX = x * stepX
+                    startY = y * stepY
+                    endX = (x + 1) * stepX
+                    endY = (y + 1) * stepY
+                    
+                    cell = warped[startY:endY, startX:endX]
+                    digit = extract_digit(cell, debug=False)
+                    
+                    if digit is not None:
+                        # Resize and prepare for classification
+                        roi = cv2.resize(digit, (32, 32))
+                        roi = roi.astype('float') / 255.0
+                        roi = img_to_array(roi)
+                        roi = np.expand_dims(roi, axis=0)
+                        
+                        # Classify the digit
+                        pred = model.predict(roi, verbose=0).argmax(axis=1)[0]
+                        board[y, x] = pred
             
             # 4. Solve the sudoku
-            solved_board = solve_sudoku(board)
+            puzzle = Sudoku(board.tolist(), 9, 9)
+            solved = puzzle.solve()
             
-            if solved_board is None:
+            if not solved:
                 return render_template_string(HTML_TEMPLATE, error='Could not solve the Sudoku puzzle. Please check if the puzzle is valid.')
             
-            # Format the result
-            result = display_sudoku_board(solved_board)
+            # Format the result as a string
+            result = format_board(puzzle.board)
             
             return render_template_string(HTML_TEMPLATE, result=result)
-            
+        
         finally:
             # Clean up temp file
             if os.path.exists(temp_path):
@@ -171,6 +187,22 @@ def solve():
     
     except Exception as e:
         return render_template_string(HTML_TEMPLATE, error=f'An error occurred: {str(e)}')
+
+def format_board(board):
+    """Format the sudoku board for display"""
+    result = "+-----------------------+\n"
+    for i in range(9):
+        if i % 3 == 0 and i != 0:
+            result += "+-----------------------+\n"
+        for j in range(9):
+            if j % 3 == 0:
+                result += "| "
+            if j == 8:
+                result += f"{board[i][j]} |\n"
+            else:
+                result += f"{board[i][j]} "
+    result += "+-----------------------+"
+    return result
 
 @app.route('/health')
 def health():
