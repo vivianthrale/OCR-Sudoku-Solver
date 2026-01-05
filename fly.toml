@@ -3,6 +3,7 @@ app = "ocr-sudoku-solver"
 primary_region = "iad"
 
 [build]
+  builder = "paketobuildpacks/builder:base"
 
 [env]
   PORT = "8080"
