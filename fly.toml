@@ -3,8 +3,7 @@ app = "ocr-sudoku-solver"
 primary_region = "iad"
 
 [build]
-  builder = "paketobuildpacks/builder:base"
-
+  dockerfile = "Dockerfile"
 [env]
   PORT = "8080"
 
