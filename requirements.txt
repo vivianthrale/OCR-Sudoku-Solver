@@ -1,4 +1,4 @@
-opencv-python
+opencv-python-headless
 tensorflow>=2.10.0,<2.16.0
 keras
 numpy
@@ -8,5 +8,3 @@ scikit-image
 matplotlib
 gunicorn
 Flask
-
-
