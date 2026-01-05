@@ -6,3 +6,5 @@ imutils
 scikit-learn
 scikit-image
 matplotlib
+gunicorn
+
