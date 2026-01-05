@@ -3,6 +3,6 @@ tensorflow>=2.10.0,<2.16.0
 keras
 numpy
 imutils
-sklearn
+scikit-learn
 skimage
 matplotlib
